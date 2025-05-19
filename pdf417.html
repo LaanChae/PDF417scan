@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF417 扫码（移动 + 桌面）</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: #000;
+      color: #fff;
+    }
+    #video-container {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      background: #000;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    #overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 80%;
+      height: 30%;
+      transform: translate(-50%, -50%);
+      border: 2px dashed rgba(255,255,255,0.7);
+      border-radius: 8px;
+    }
+    #controls {
+      padding: 0.5em;
+      text-align: center;
+      background: #111;
+    }
+    select, button {
+      padding: 0.6em 1.2em;
+      margin: 0 0.5em;
+      font-size: 1em;
+      border: none;
+      border-radius: 4px;
+    }
+    select {
+      background: #333;
+      color: #fff;
+    }
+    button {
+      background: #2196F3;
+      color: #fff;
+    }
+    #result {
+      margin-top: 0.5em;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div id="video-container">
+    <video id="video" autoplay muted playsinline></video>
+    <div id="overlay"></div>
+  </div>
+  <div id="controls">
+    <!-- 新增：摄像头设备选择下拉 -->
+    <select id="device-select"></select>
+    <button id="start-btn">启动扫描</button>
+    <button id="stop-btn" disabled>停止扫描</button>
+    <div id="result">扫描结果：<span id="output">—</span></div>
+  </div>
+
+  <!-- ZXing 库（支持 ES 模块）-->
+  <script type="module">
+    import {
+      BrowserMultiFormatReader,
+      BarcodeFormat,
+      DecodeHintType
+    } from 'https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/esm/index.min.js';
+
+    const videoElement = document.getElementById('video');
+    const deviceSelect  = document.getElementById('device-select');
+    const startBtn      = document.getElementById('start-btn');
+    const stopBtn       = document.getElementById('stop-btn');
+    const outputEl      = document.getElementById('output');
+
+    // 仅启用 PDF_417 格式
+    const hints = new Map();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.PDF_417]);
+    const codeReader = new BrowserMultiFormatReader(hints);
+
+    // 页面加载时枚举设备并填充下拉列表
+    async function listCameras() {
+      try {
+        const devices = await codeReader.listVideoInputDevices();
+        deviceSelect.innerHTML = '';
+        devices.forEach(device => {
+          const option = document.createElement('option');
+          option.value = device.deviceId;
+          option.text  = device.label || `Camera ${device.deviceId}`;
+          deviceSelect.appendChild(option);
+        });
+      } catch (err) {
+        console.error('无法获取摄像头列表：', err);
+        const option = document.createElement('option');
+        option.text = '无可用摄像头';
+        deviceSelect.appendChild(option);
+        startBtn.disabled = true;
+      }
+    }
+
+    async function startScan() {
+      startBtn.disabled = true;
+      stopBtn.disabled  = false;
+      outputEl.textContent = '正在扫描，请对准条码';
+
+      const selectedDeviceId = deviceSelect.value;
+      codeReader.decodeFromVideoDevice(
+        selectedDeviceId,
+        videoElement,
+        (result, err) => {
+          if (result) {
+            outputEl.textContent = result.getText();
+            stopScan();
+          }
+          // 对于 NoResultException 类型的 err，可忽略
+        }
+      );
+    }
+
+    function stopScan() {
+      codeReader.reset();
+      startBtn.disabled = false;
+      stopBtn.disabled  = true;
+    }
+
+    // 事件绑定
+    startBtn.addEventListener('click', startScan);
+    stopBtn .addEventListener('click', stopScan);
+
+    // 初始列出摄像头
+    listCameras();
+  </script>
+</body>
+</html>
